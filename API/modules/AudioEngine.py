@@ -3,12 +3,13 @@ import queue
 import sounddevice as sd
 import soundfile as sf
 import numpy as np
-
+from API.modules.Logging import Log 
 
 class AudioEngine:
     def __init__(self, samplerate=16000, blocksize=1024):
         self.SR = samplerate
         self.BLOCK = blocksize
+        self.log = Log("Audio Engine").log
 
         self.q = queue.Queue()
         self.running = True
@@ -33,6 +34,7 @@ class AudioEngine:
             daemon=True
         )
         self.thread.start()
+        self.log("Started")
 
     # ─────────────────────────────
     # PUBLIC API
@@ -40,26 +42,31 @@ class AudioEngine:
 
     def play_bg_file(self, file_path, volume=0.4):
         """Looping background sound (thinking / listening)"""
+        self.log("putting Query bg file",file_path)
         self.bgAllow = True
         self.q.put(("bg", file_path, volume))
 
-    def play_tts_file(self, file_path, volume=1.0):
-        self.stop_bg()
+    def play_file(self, file_path, volume=1.0):
         """Foreground TTS (preempts BG)"""
+        self.log("putting Query file",file_path)
+        self.stop_bg()
         self.q.put(("tts", file_path, volume))
 
     def play_samples(self, samples: np.ndarray):
         """Raw samples playback (preempts BG)"""
+        self.log("putting Samples Query",samples.shape)
         self.stop_bg()
         self.q.put(("samples", samples, None))
 
     def stop_bg(self):
         """Stop background audio immediately"""
+        self.log("BG stop flag setted")
         self.bgAllow = False
         self.bg_stop_event.set()
 
     def shutdown(self):
         """Clean shutdown"""
+        self.log("Shuting Down...")
         self.running = False
         self.bg_stop_event.set()
         self.q.put(("exit", None, None))
@@ -79,7 +86,7 @@ class AudioEngine:
                 self._play_bg_loop(a, b)
 
             elif job == "tts":
-                self._play_tts(a, b)
+                self._play_file(a, b)
 
             elif job == "samples":
                 self._play_samples(a)
@@ -94,6 +101,7 @@ class AudioEngine:
     # ─────────────────────────────
 
     def _play_bg_loop(self, file_path, volume):
+        self.log("Playing BG loop",file_path)
         data, sr = sf.read(file_path, dtype="float32")
 
         if data.ndim > 1:
@@ -114,7 +122,8 @@ class AudioEngine:
                     return
                 self.stream.write(data[i:i + self.BLOCK])
 
-    def _play_tts(self, file_path, volume):
+    def _play_file(self, file_path, volume):
+        self.log("Playing file", file_path)
         self.bg_stop_event.set()
 
         data, sr = sf.read(file_path, dtype="float32")
@@ -128,6 +137,7 @@ class AudioEngine:
         self.stream.write(data * volume)
 
     def _play_samples(self, samples):
+        self.log("Playing Samples")
         self.bg_stop_event.set()
         #print(self.bg_stop_event.is_set(),"o")
         if samples.ndim > 1:
@@ -136,6 +146,7 @@ class AudioEngine:
         self.stream.write(samples.astype(np.float32))
 
     def _resample(self, data, sr):
+        self.log("ReSampling")
         ratio = self.SR / sr
         x_old = np.arange(len(data))
         x_new = np.linspace(0, len(data) - 1, int(len(data) * ratio))

@@ -1,19 +1,22 @@
+from API.modules.AudioEngine import AudioEngine
 from piper.voice import PiperVoice
 import numpy as np
 import threading
 import queue
 import time
 
-from API.modules.AudioEngine import AudioEngine
+from API.modules.Logging import Log
+
 
 class PiperTTS:
     def __init__(self, model_path, speaker: AudioEngine):
+        self.log = Log("PiperTTS").log
+
         if not isinstance(model_path, str):
             raise TypeError("model_path must be a string")
         
-        print("loading Piper voice...", model_path)
+        self.log("loading PiperVoice Model",model_path)
         self.voice = PiperVoice.load(model_path)
-        print("loaded", model_path)
 
         syn = self.voice.config
         syn.length_scale = 1.2
@@ -28,21 +31,26 @@ class PiperTTS:
         
         self.thread = threading.Thread(target=self._worker, daemon=True)
         self.thread.start()
+        self.log("loaded PiperVoice Model", model_path)
+
 
     # ---------------------------
     # Public API
     # ---------------------------
     def enqueue(self, text: str,slow = None):
         """Add text to TTS queue for non-blocking speech"""
+        self.log("Putting Query")
         self.q.put((text,slow))
 
     def stop(self):
         """Stop current speaking"""
+        self.log("Stoping BG music")
         self.speaker.stop_bg()  # Stop background or current playback
         #self.speaking = False
 
     def shutdown(self):
         """Stop the TTS worker"""
+        self.log("Shuting Down")
         self.running = False
         self.q.put(None)
 
@@ -81,6 +89,7 @@ class PiperTTS:
         return text
 
     def synthesize_stream(self, text, syn_config=None):
+        self.log("Synthesizing text:",text)
         for chunk in self.voice.synthesize(text, syn_config=syn_config):
             samples = chunk.audio_float_array
             if samples is not None:
