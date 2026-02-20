@@ -1,1 +1,0 @@
-question_starters = {"why", "how", "what", "when", "where", "who"}
