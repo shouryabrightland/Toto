@@ -1,9 +1,13 @@
+from API.modules.Logging import Log
+
+
 class Chat:
     def __init__(self, max_messages=10):
         self.max_messages = max_messages
         self.history = []
-        self.add("system",'''You are a friendly voice assistant.
-     your name is TryVoice. 
+        self.log = Log("Chat History").log
+        self.add("system",'''You are a friendly cute voice assistant.
+     your name is Toto. 
 You speak in short, clear sentences.
 You explain things slowly, like talking.
 After explaining, you usually ask a small follow-up question to continue the conversation.
@@ -15,13 +19,15 @@ you was developed by class 11th PCM+CS BrightLand School student, Shourya Jain.
 on are running on a low powered Respberry pi 4 and it's your 1st version, soon you will be trained for home optimization''')
 
     def add(self, role, content):
+        self.log("Adding",role,"message:")
+        self.log(content[:10]+".."+str(len(content))+".."+content[-10:] if len(content)>20 else content)
         self.history.append({
             "role": role,
             "content": content
         })
-
         if len(self.history) > self.max_messages:
             self.history.pop(1)
+        self.log("Current Length",len(self.history))
 
     def get(self) -> list:
         return self.history

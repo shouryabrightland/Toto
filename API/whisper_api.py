@@ -5,18 +5,14 @@ from faster_whisper import WhisperModel
 from API.modules.AudioEngine import AudioEngine
 from API.modules.Logging import Log
 # ---------------------------
-# Audio recording function
-# ---------------------------
-# ---------------------------
 # Whisper API class
 # ---------------------------
 class WhisperAPI:
-    def __init__(self,speaker:AudioEngine, model_name="base.en"):
+    def __init__(self, model_name="base.en"):
         """
         model_name: "tiny", "small", "medium", "large" (tiny is best for Pi)
         """
         self.log = Log("WhisperAPI").log
-        self.SR = speaker.SR
         self.log("Loading Whisper",model_name,"model...")
         self.model = WhisperModel(
             "base.en",
@@ -24,7 +20,6 @@ class WhisperAPI:
             compute_type="int8"
         )
         self.log("loaded Model successfully...")
-        self.speaker = speaker
         self.recording_file = "input.wav"
     #---------------------------------------
 
@@ -33,7 +28,6 @@ class WhisperAPI:
          immediately transcribes audio
         """
         audio = audio.astype("float32")
-        self.speaker.play_bg_file("effects/think.mp3", volume=0.5)
         #time.sleep(5)---------------------
         t1 = time.perf_counter()
         self.log("transcripting Audio...")

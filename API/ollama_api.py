@@ -1,72 +1,23 @@
+import threading
 from typing import Generator
 import requests
 import json
+
+from API.modules.Logging import Log
+
 
 class OllamaAPI:
     def __init__(self, model="gemma3:1b", timeout=30):
         self.model = model
         self.url = "http://localhost:11434/api/chat"
         self.timeout = timeout
+        self.log = Log("Ollama API").log
+        self.stopflag = threading.Event()
+        self._active_response = None   # 🔴 store active connection
 
-    def ask(self, messages) -> str:
-        if not messages or not isinstance(messages, list):
-            return "I don't have enough context to respond."
-
-        payload = {
-            "model": self.model,
-            "messages": messages,
-            "stream": False
-        }
-
-        try:
-            res = requests.post(
-                self.url,
-                json=payload,
-                timeout=self.timeout
-            )
-        except requests.exceptions.ConnectionError:
-            return "The assistant is not ready yet. Please wait."
-        except requests.exceptions.Timeout:
-            return "Thinking took too long. Please try again."
-        except requests.exceptions.RequestException:
-            return "I ran into a system problem. Try again."
-
-        if res.status_code != 200:
-            return "I had trouble thinking just now."
-
-        try:
-            data = res.json()
-        except json.JSONDecodeError:
-            return "I couldn't understand my own response."
-
-        # 🔴 THIS is the part you were asking about
-        if isinstance(data, dict) and "error" in data:
-            # Example: {"error": "out of memory"}
-            err = data.get("error", "").lower()
-
-            if "pull" in err or "download" in err:
-                return "I am downloading my model. Please wait a bit."
-
-            if "model" in err and "not found" in err:
-                return "My language model is not installed."
-
-            if "memory" in err:
-                return "I ran out of memory. Please close other apps."
-            
-            return "Something went wrong while thinking."
-
-        # Normal success path
-        message = data.get("message")
-        if not isinstance(message, dict):
-            return "I got an unexpected response."
-
-        content = message.get("content")
-        if not content:
-            return "I couldn't form a proper reply."
-
-        return content.strip()
-    
     def ask_stream(self, messages):
+        self.stopflag.clear()  # reset before new request
+        self.log("Requesting Stream..")
         if not isinstance(messages, list) or not messages:
             yield "[error] No input provided"
             return
@@ -84,6 +35,7 @@ class OllamaAPI:
                 timeout=self.timeout,
                 stream=True
             )
+            self._active_response = res   # 🔴 store it
         except requests.exceptions.ConnectionError:
             yield "[error] Ollama server is not running"
             return
@@ -102,6 +54,13 @@ class OllamaAPI:
 
         try:
             for line in res.iter_lines(decode_unicode=True):
+
+                # 🔥 HARD STOP CHECK
+                if self.stopflag.is_set():
+                    self.log("Stop flag triggered → aborting request")
+                    res.close()  # 🔴 this stops server generation
+                    break
+
                 if not line:
                     continue
 
@@ -132,8 +91,97 @@ class OllamaAPI:
         except json.JSONDecodeError:
             yield "[error] Stream corrupted"
             return
+        finally:
+            # 🔴 ensure connection is closed
+            if self._active_response:
+                self._active_response.close()
+                self._active_response = None
+
+            self.log("Stream closed cleanly")
+        
+    def stop(self):
+        self.stopflag.set()
+        # 🔥 Immediate forced abort
+        if self._active_response:
+            self._active_response.close()
 
 
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+  # def ask(self, messages) -> str:
+    #     self.log("Requesting message..")
+    #     if not messages or not isinstance(messages, list):
+    #         return "I don't have enough context to respond."
+
+    #     payload = {
+    #         "model": self.model,
+    #         "messages": messages,
+    #         "stream": False
+    #     }
+
+    #     try:
+    #         res = requests.post(
+    #             self.url,
+    #             json=payload,
+    #             timeout=self.timeout
+    #         )
+    #     except requests.exceptions.ConnectionError:
+    #         return "The assistant is not ready yet. Please wait."
+    #     except requests.exceptions.Timeout:
+    #         return "Thinking took too long. Please try again."
+    #     except requests.exceptions.RequestException:
+    #         return "I ran into a system problem. Try again."
+
+    #     if res.status_code != 200:
+    #         return "I had trouble thinking just now."
+
+    #     try:
+    #         data = res.json()
+    #     except json.JSONDecodeError:
+    #         return "I couldn't understand my own response."
+
+    #     # 🔴 THIS is the part you were asking about
+    #     if isinstance(data, dict) and "error" in data:
+    #         # Example: {"error": "out of memory"}
+    #         err = data.get("error", "").lower()
+
+    #         if "pull" in err or "download" in err:
+    #             return "I am downloading my model. Please wait a bit."
+
+    #         if "model" in err and "not found" in err:
+    #             return "My language model is not installed."
+
+    #         if "memory" in err:
+    #             return "I ran out of memory. Please close other apps."
+            
+    #         return "Something went wrong while thinking."
+
+    #     # Normal success path
+    #     message = data.get("message")
+    #     if not isinstance(message, dict):
+    #         return "I got an unexpected response."
+
+    #     content = message.get("content")
+    #     if not content:
+    #         return "I couldn't form a proper reply."
+
+    #     return content.strip()
+    
 
 '''
 def is_model_available(self):
