@@ -24,7 +24,8 @@ class AudioEngine:
             samplerate=self.SR,
             channels=1,
             dtype="float32",
-            blocksize=self.BLOCK
+            blocksize=self.BLOCK,
+            device="pipewire"
         )
         self.stream.start()
 

@@ -27,7 +27,7 @@ class WakeAssistant:
         # -------- CONFIG --------
         self.SR = 16000
         self.WINDOW_SEC = 1.5
-        self.HOP_SEC = 0.1
+        self.HOP_SEC = 0.2
 
         self.THRESHOLD = 0.6
         self.VOTE_WINDOW = 5
@@ -57,11 +57,14 @@ class WakeAssistant:
         # -------- Load Wake Model --------
         self.log("Loading WakeupWord model..", model_path)
 
+        sess_options = ort.SessionOptions()
+        sess_options.intra_op_num_threads = 1
+        sess_options.inter_op_num_threads = 1
         self.session = ort.InferenceSession(
             model_path,
+            sess_options=sess_options,
             providers=["CPUExecutionProvider"],
         )
-
         self.input_name = self.session.get_inputs()[0].name
         self.output_name = self.session.get_outputs()[0].name
 
@@ -205,7 +208,7 @@ class WakeAssistant:
 
     # ---------------- AUDIO CALLBACK ----------------
     def audio_callback(self, indata, frames, time_info, status):
-
+        t1 = time.perf_counter()
         if status:
             self.log("Audio status:", status)
 
@@ -222,6 +225,8 @@ class WakeAssistant:
                 self.wake_detection()
         else:
             self.process_recording(chunk)
+        t2 = time.perf_counter()
+        self.log((t2-t1)*1000,"ms")
 
     # ---------------- START ----------------
     def start(self, output_queue: Queue):
@@ -241,6 +246,7 @@ class WakeAssistant:
                 blocksize=self.HOP_SAMPLES,
                 dtype="float32",
                 callback=self.audio_callback,
+                device="pipewire"
             ):
                 while True:
                     time.sleep(0.1)

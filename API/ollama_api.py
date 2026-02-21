@@ -14,6 +14,7 @@ class OllamaAPI:
         self.log = Log("Ollama API").log
         self.stopflag = threading.Event()
         self._active_response = None   # 🔴 store active connection
+        self.requestCount = 0
 
     def ask_stream(self, messages):
         self.stopflag.clear()  # reset before new request
@@ -32,7 +33,7 @@ class OllamaAPI:
             res = requests.post(
                 self.url,
                 json=payload,
-                timeout=self.timeout,
+                timeout=self.timeout if self.requestCount>0 else 120,
                 stream=True
             )
             self._active_response = res   # 🔴 store it
@@ -96,7 +97,7 @@ class OllamaAPI:
             if self._active_response:
                 self._active_response.close()
                 self._active_response = None
-
+            self.requestCount = self.requestCount+1
             self.log("Stream closed cleanly")
         
     def stop(self):
